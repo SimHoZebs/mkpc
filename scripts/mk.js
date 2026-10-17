@@ -7166,7 +7166,11 @@ function Sprite(strSprite) {
 				iX = W - iX;
 			var fScale = (window.MK3D.FIT.C / Math.max(0.5, p.dist)) * (fSprite.size || 1);
 			oCtSprites[i][0].style.zIndex = Math.round(10000 - p.dist * window.MK3D.WORLD_SCALE);
-			this.draw(iX, iY, fScale, 0);
+			// iZ=9 defeats the stock top-of-screen cull (which hides sprites
+			// above row 9*screenscale, i.e. at the background strip): in 3D
+			// those distant sprites are real dots on the track, hide them
+			// only when actually off-screen.
+			this.draw(iX, iY, fScale, 9);
 		};
 
 		this[i].setState = function(iState) {
@@ -7808,7 +7812,7 @@ function createMarker(oKart) {
 			if (bSelectedMirror)
 				iX = W - iX;
 			this.div[i].style.zIndex = Math.round(10000 - p.dist * window.MK3D.WORLD_SCALE);
-			this.draw(i, iX, iY, fScale, 0);
+			this.draw(i, iX, iY, fScale, 12);
 			return;
 		}
 		var fSize = (fSprite.size || 1);

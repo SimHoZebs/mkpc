@@ -7967,7 +7967,19 @@ function redrawCanvas(i, fCamera, lMap) {
 				if (m) threeInfo.bgUrl = m[1];
 			}
 		}
-		window.MK3D.render(threeInfo, fCamera, lMap, mapCanvas, { mirror: bSelectedMirror, bgUrl: threeInfo.bgUrl });
+		if (!threeInfo.bgUrls || !threeInfo.bgUrls.length) {
+			var seen = {};
+			threeInfo.bgUrls = [];
+			var bgDivs = oContainers[i].querySelectorAll("div[style*='background-image']");
+			for (var bi = 0; bi < bgDivs.length; bi++) {
+				var bm = /url\(["']?(.*?)["']?\)/.exec(bgDivs[bi].style.backgroundImage || "");
+				if (bm && !seen[bm[1]]) {
+					seen[bm[1]] = true;
+					threeInfo.bgUrls.push(bm[1]);
+				}
+			}
+		}
+		window.MK3D.render(threeInfo, fCamera, lMap, mapCanvas, { mirror: bSelectedMirror, bgUrl: threeInfo.bgUrl, bgUrls: threeInfo.bgUrls || [] });
 		return;
 	}
 

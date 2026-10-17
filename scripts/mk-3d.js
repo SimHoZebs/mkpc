@@ -134,6 +134,8 @@
 			ground: null,
 			groundTex: null,
 			skirt: null,
+			ring: null,
+			ringKey: null,
 			mapW: 0,
 			mapH: 0,
 			fov: 0,
@@ -183,7 +185,54 @@
 		}
 	}
 
-	// Sky color sampled from the track's background strip image (top rows).
+	// Distant scenery ring: the track's flat background strips as textures
+	// on open cylinders around the map. Static world geometry, so rotation
+	// parallax comes out right by itself. Layer order = creation order:
+	// index 0 is farthest (like stock's scroll factors). Rebuilt when the
+	// URL set or map size changes.
+	function updateRing(state, urls) {
+		var key = state.mapW + "x" + state.mapH + "|" + urls.join("|");
+		if (key === state.ringKey) return;
+		state.ringKey = key;
+		if (state.ring) {
+			state.scene.remove(state.ring);
+			state.ring.traverse(function(obj) {
+				if (obj.geometry) obj.geometry.dispose();
+				if (obj.material) {
+					if (obj.material.map) obj.material.map.dispose();
+					obj.material.dispose();
+				}
+			});
+			state.ring = null;
+		}
+		if (!urls.length) return;
+		var mapCX = state.mapW * FIT.KX / 2, mapCZ = state.mapH / WORLD_SCALE / 2;
+		var mapDiag = Math.sqrt(Math.pow(state.mapW * FIT.KX, 2) + Math.pow(state.mapH / WORLD_SCALE, 2));
+		var loader = new THREE.TextureLoader();
+		loader.crossOrigin = "anonymous";
+		var group = new THREE.Group();
+		urls.forEach(function(url, i) {
+			var radius = mapDiag * (1.5 - 0.3 * i);
+			var height = radius * 0.2;
+			var geo = new THREE.CylinderGeometry(radius, radius, height, 72, 1, true);
+			var tex = loader.load(url,
+				function() { mesh.visible = true; },
+				undefined,
+				function() { mesh.visible = false; });
+			tex.encoding = THREE.sRGBEncoding;
+			tex.magFilter = THREE.NearestFilter;
+			tex.minFilter = THREE.NearestFilter;
+			tex.generateMipmaps = false;
+			var mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, transparent: true, alphaTest: 0.5 });
+			var mesh = new THREE.Mesh(geo, mat);
+			mesh.position.set(mapCX, height / 2, mapCZ);
+			mesh.visible = false;
+			mesh.renderOrder = -10 + i;
+			group.add(mesh);
+		});
+		state.ring = group;
+		state.scene.add(group);
+	}
 	// Same-origin artwork reads directly; anything else falls back to a
 	// neutral sky blue. Cached per URL.
 	var FALLBACK_SKY = [0.53, 0.81, 0.92];
@@ -267,6 +316,7 @@
 		if (!state || !mapCanvas || !mapCanvas.width) return;
 		ensureGround(state, mapCanvas);
 		state.groundTex.needsUpdate = true;
+		updateRing(state, opts.bgUrls || []);
 
 		var bg = parseBg(lMap && lMap.bgcolor);
 		if (state.skirt)

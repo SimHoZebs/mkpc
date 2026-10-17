@@ -92,6 +92,13 @@ test('3D ground renderer engages and draws without errors', async ({ page }) => 
   })()`));
   expect(sky[0] + sky[1] + sky[2]).toBeGreaterThan(1.5);
 
+  // Distant scenery ring built from the track's own background layers.
+  const ring = await page.evaluate(() => (window as any).mkDevEval(`(function() {
+    var r = oScreens[0].threeInfo.ring;
+    return r ? r.children.map(function(m) { return m.visible; }) : null;
+  })()`));
+  expect(ring).toEqual([true, true]);
+
   await page.screenshot({ path: 'test-results/mk-3d-race.png' });
 });
 

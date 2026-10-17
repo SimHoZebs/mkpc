@@ -6192,7 +6192,7 @@ function resetScreen() {
 		oContainers[i].appendChild(canvas);
 
 		if (bThreeEngine && window.MK3D) {
-			var threeInfo = window.MK3D.init(canvas, { camHeight: iCamHeight, camDist: iCamDist });
+			var threeInfo = window.MK3D.init(canvas);
 			if (threeInfo && threeInfo.renderer) oScreens[i].threeInfo = threeInfo;
 			else {
 				console.error("Failed to initialize 3D engine, falling back to WebGL engine");
@@ -7136,7 +7136,7 @@ function Sprite(strSprite) {
 
 		this[i].renderThree = function(screenIdx, fSprite) {
 			var i = this.i;
-			var p = window.MK3D.project(oScreens[screenIdx].threeInfo, fSprite.x, fSprite.y, fSprite.z);
+			var p = window.MK3D.project(oScreens[screenIdx].threeInfo, fSprite.x, fSprite.y, fSprite.z, { mirror: bSelectedMirror });
 			if (!p) {
 				oCtSprites[i][0].style.display = "none";
 				return;
@@ -7146,7 +7146,7 @@ function Sprite(strSprite) {
 			var s = iScreenScale, W = iWidth * s, H = iHeight * s;
 			var iX = p.x * (W + s) / W - s / 2,
 				iY = p.y * (H + s) / H + s;
-			var fScale = (iCamDist / Math.max(0.5, p.dist * window.MK3D.WORLD_SCALE)) * (fSprite.size || 1);
+			var fScale = (window.MK3D.FIT.C / Math.max(0.5, p.dist)) * (fSprite.size || 1);
 			oCtSprites[i][0].style.zIndex = Math.round(10000 - p.dist * window.MK3D.WORLD_SCALE);
 			this.draw(iX, iY, fScale, 0);
 		};
@@ -7778,7 +7778,7 @@ function createMarker(oKart) {
 	};
 	res.render = function(i, fCamera, fSprite) {
 		if (bThreeEngine && window.MK3D && oScreens[i] && oScreens[i].threeInfo) {
-			var p = window.MK3D.project(oScreens[i].threeInfo, fSprite.x, fSprite.y, fSprite.z);
+			var p = window.MK3D.project(oScreens[i].threeInfo, fSprite.x, fSprite.y, fSprite.z, { mirror: bSelectedMirror });
 			if (!p) {
 				this.div[i].style.display = "none";
 				return;
@@ -7786,7 +7786,7 @@ function createMarker(oKart) {
 			var s = iScreenScale, W = iWidth * s, H = iHeight * s;
 			var iX = p.x * (W + s) / W - s / 2,
 				iY = p.y * (H + s) / H + s,
-				fScale = (iCamDist / Math.max(0.5, p.dist * window.MK3D.WORLD_SCALE)) * (fSprite.size || 1);
+				fScale = (window.MK3D.FIT.C / Math.max(0.5, p.dist)) * (fSprite.size || 1);
 			this.div[i].style.zIndex = Math.round(10000 - p.dist * window.MK3D.WORLD_SCALE);
 			this.draw(i, iX, iY, fScale, 0);
 			return;

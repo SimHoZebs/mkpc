@@ -114,6 +114,15 @@
 		var scene = new THREE.Scene();
 		var camera = new THREE.PerspectiveCamera(60, canvas.width / Math.max(1, canvas.height), 0.1, 2000);
 
+		// Stock fades ground to the background color past ~238 map px ahead
+		// (its distance cutoff). Reproduce it as (near-)hard fog so the DOM
+		// background strips (hills/trees, positioned for stock framing) sit
+		// over background color, not over detailed far ground. Without this,
+		// the strips cover up to ~100px of visible track.
+		// Cutoff in world units radial from the camera:
+		// sqrt((C + 238/S)^2 + H^2) ~= 34.3.
+		scene.fog = new THREE.Fog(0x000000, 34.15, 34.35);
+
 		var hemi = new THREE.HemisphereLight(0xffffff, 0x334433, 0.9);
 		scene.add(hemi);
 		var dir = new THREE.DirectionalLight(0xffffff, 0.6);
@@ -217,6 +226,7 @@
 
 		var bg = parseBg(lMap && lMap.bgcolor);
 		state.renderer.setClearColor(new THREE.Color(bg[0], bg[1], bg[2]), 1);
+		state.scene.fog.color.setRGB(bg[0], bg[1], bg[2]);
 
 		var frame = cameraFrame(fCamera);
 		var cam = state.camera;

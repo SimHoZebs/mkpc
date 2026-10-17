@@ -71,6 +71,16 @@ test('3D ground renderer engages and draws without errors', async ({ page }) => 
   expect(Math.abs(align.dx)).toBeLessThan(8);
   expect(Math.abs(align.dy)).toBeLessThan(10);
 
+  // Distance cutoff reproduces stock framing so the DOM background strips
+  // sit over background color, not over detailed far ground.
+  const fog = await page.evaluate(() => (window as any).mkDevEval(`(function() {
+    var f = oScreens[0].threeInfo.scene.fog;
+    return { near: f.near, far: f.far, color: [f.color.r, f.color.g, f.color.b] };
+  })()`));
+  expect(fog.near).toBeCloseTo(34.15, 1);
+  expect(fog.far).toBeCloseTo(34.35, 1);
+  expect(fog.color[1]).toBeCloseTo(161 / 255, 2); // map1 bgcolor green
+
   await page.screenshot({ path: 'test-results/mk-3d-race.png' });
 });
 

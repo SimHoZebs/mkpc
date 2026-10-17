@@ -25,11 +25,11 @@
 	// true pinhole, and matching it keeps road width identical to stock.
 	var WORLD_SCALE = 8;
 	var FIT = {
-		H: 2.766,          // camera height, world units
-		C: 4.407,          // camera backoff behind reference point, world units
-		PITCH: 20.55 * Math.PI / 180, // camera tilt below horizontal
-		F_AT_312: 417.2,  // focal length in backing px at 312 canvas rows
-		KX: 0.0870         // world units per map px on the x axis
+		H: 2.514,          // camera height, world units
+		C: 4.389,          // camera backoff behind reference point, world units
+		PITCH: 18.22 * Math.PI / 180, // camera tilt below horizontal
+		F_AT_312: 413.7,  // focal length in backing px at 312 canvas rows
+		KX: 0.0875        // world units per map px on the x axis
 	};
 
 	function parseBg(bgcolor) {

@@ -52,12 +52,16 @@
 		renderer.setPixelRatio(1);
 
 		try {
+			window.__mk3dInits = (window.__mk3dInits || 0) + 1;
+			console.log("[mk-3d] init #" + window.__mk3dInits + " guard=" + !!window.__mk3dBadge +
+				" parent=" + (canvas.parentNode && (canvas.parentNode.nodeName + "." + canvas.parentNode.className)));
 			console.log("[mk-3d] 3D renderer active (" + canvas.width + "x" + canvas.height + ")");
-			if (canvas.parentNode && !canvas.parentNode.querySelector(".mk3d-badge")) {
+			if (!window.__mk3dBadge) {
 				var badge = document.createElement("div");
 				badge.className = "mk3d-badge";
 				badge.textContent = "3D";
-				badge.style.position = "absolute";
+				window.__mk3dBadge = badge;
+				badge.style.position = "fixed";
 				badge.style.right = "4px";
 				badge.style.top = "4px";
 				badge.style.zIndex = 9999;
@@ -67,7 +71,10 @@
 				badge.style.padding = "2px 6px";
 				badge.style.borderRadius = "4px";
 				badge.style.pointerEvents = "none";
-				canvas.parentNode.appendChild(badge);
+				// NB: appended to body, NOT the game container: resetScreen
+				// deep-clones that subtree for motion-blur frames, which would
+				// duplicate any badge inside it.
+				document.body.appendChild(badge);
 			}
 		}
 		catch (e) {}

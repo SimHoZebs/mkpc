@@ -75,11 +75,22 @@ test('3D ground renderer engages and draws without errors', async ({ page }) => 
   // sit over background color, not over detailed far ground.
   const fog = await page.evaluate(() => (window as any).mkDevEval(`(function() {
     var f = oScreens[0].threeInfo.scene.fog;
-    return { near: f.near, far: f.far, color: [f.color.r, f.color.g, f.color.b] };
+    return f ? { near: f.near, far: f.far } : null;
   })()`));
-  expect(fog.near).toBeCloseTo(34.15, 1);
-  expect(fog.far).toBeCloseTo(34.35, 1);
-  expect(fog.color[1]).toBeCloseTo(161 / 255, 2); // map1 bgcolor green
+  expect(fog).toBeNull();
+
+  // 3D mode hides the flat background strips and renders its own sky:
+  // no visible strip divs, and a non-black clear color (map1 samples a
+  // cream sky from its hills artwork).
+  const strips = await page.evaluate(() => Array.from(
+    document.querySelectorAll('#mariokartcontainer div[style*="background-image"]')
+  ).filter((d) => (d as HTMLElement).style.display !== 'none').length);
+  expect(strips).toBe(0);
+  const sky = await page.evaluate(() => (window as any).mkDevEval(`(function() {
+    var c = oScreens[0].threeInfo.renderer.getClearColor();
+    return [c.r, c.g, c.b];
+  })()`));
+  expect(sky[0] + sky[1] + sky[2]).toBeGreaterThan(1.5);
 
   await page.screenshot({ path: 'test-results/mk-3d-race.png' });
 });

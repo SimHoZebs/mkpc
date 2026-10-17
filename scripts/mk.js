@@ -7261,6 +7261,10 @@ function BGLayer(strImage, scaleFactor, isDelay) {
 		oLayer.style.height = (10 * iScreenScale)+"px";
 		oLayer.style.width = (iWidth * iScreenScale)+"px";
 		oLayer.style.position = "absolute";
+		// 3D mode renders its own sky: hide the flat background strips
+		// (clones inherit this). Stock mode is untouched.
+		if (bThreeEngine && window.MK3D)
+			oLayer.style.display = "none";
 		(function(oLayer){deferRender(function(){oLayer.style.backgroundImage="url('"+strImage+"')"},300)})(oLayer);
 		oLayer.style.backgroundSize = "auto 100%";
 		oLayer.className = "pixelated";
@@ -7955,7 +7959,15 @@ function redrawCanvas(i, fCamera, lMap) {
 	const posY = fCamera.y;
 
 	if (bThreeEngine && oScreens[i].threeInfo && window.MK3D) {
-		window.MK3D.render(oScreens[i].threeInfo, fCamera, lMap, mapCanvas, { mirror: bSelectedMirror });
+		var threeInfo = oScreens[i].threeInfo;
+		if (!threeInfo.bgUrl) {
+			var bgDiv = oContainers[i].querySelector("div[style*='background-image']");
+			if (bgDiv) {
+				var m = /url\(["']?(.*?)["']?\)/.exec(bgDiv.style.backgroundImage || "");
+				if (m) threeInfo.bgUrl = m[1];
+			}
+		}
+		window.MK3D.render(threeInfo, fCamera, lMap, mapCanvas, { mirror: bSelectedMirror, bgUrl: threeInfo.bgUrl });
 		return;
 	}
 

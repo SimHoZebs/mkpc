@@ -32,6 +32,13 @@
 		KX: 0.0875        // world units per map px on the x axis
 	};
 
+	// Plain colors are authored in sRGB (like stock's flat fills); convert
+	// to linear so the sRGB output transform reproduces them exactly.
+	// (Texture maps round-trip on their own and need no handling.)
+	function srgbToLinear(c) {
+		return c.convertSRGBToLinear();
+	}
+
 	function parseBg(bgcolor) {
 		if (Array.isArray(bgcolor) && bgcolor.length >= 3)
 			return [bgcolor[0] / 255, bgcolor[1] / 255, bgcolor[2] / 255];
@@ -114,15 +121,6 @@
 		var scene = new THREE.Scene();
 		var camera = new THREE.PerspectiveCamera(60, canvas.width / Math.max(1, canvas.height), 0.1, 2000);
 
-		// Stock fades ground to the background color past ~238 map px ahead
-		// (its distance cutoff). Reproduce it as (near-)hard fog so the DOM
-		// background strips (hills/trees, positioned for stock framing) sit
-		// over background color, not over detailed far ground. Without this,
-		// the strips cover up to ~100px of visible track.
-		// Cutoff in world units radial from the camera:
-		// sqrt((C + 238/S)^2 + H^2) ~= 34.3.
-		scene.fog = new THREE.Fog(0x000000, 34.15, 34.35);
-
 		var hemi = new THREE.HemisphereLight(0xffffff, 0x334433, 0.9);
 		scene.add(hemi);
 		var dir = new THREE.DirectionalLight(0xffffff, 0.6);
@@ -135,9 +133,11 @@
 			camera: camera,
 			ground: null,
 			groundTex: null,
+			skirt: null,
 			mapW: 0,
 			mapH: 0,
-			fov: 0
+			fov: 0,
+			skyCache: {}
 		};
 		updateProjection(state);
 		return state;
@@ -171,6 +171,50 @@
 		state.mapW = w;
 		state.mapH = h;
 		state.scene.add(state.ground);
+		// Plain backdrop plane far below the horizon line: whatever the
+		// track texture doesn't cover (past map edges) shows the track
+		// background color, like stock's out-of-bounds fill.
+		if (!state.skirt) {
+			var skirtGeo = new THREE.PlaneGeometry(4096, 4096);
+			skirtGeo.rotateX(-Math.PI / 2);
+			state.skirt = new THREE.Mesh(skirtGeo, new THREE.MeshBasicMaterial({ color: 0x000000 }));
+			state.skirt.position.y = -0.5;
+			state.scene.add(state.skirt);
+		}
+	}
+
+	// Sky color sampled from the track's background strip image (top rows).
+	// Same-origin artwork reads directly; anything else falls back to a
+	// neutral sky blue. Cached per URL.
+	var FALLBACK_SKY = [0.53, 0.81, 0.92];
+	function sampleSky(state, url) {
+		if (!url) return FALLBACK_SKY;
+		var cached = state.skyCache[url];
+		if (cached) return cached;
+		state.skyCache[url] = FALLBACK_SKY;
+		try {
+			var img = new Image();
+			img.onload = function() {
+				try {
+					var cv = document.createElement("canvas");
+					cv.width = 8; cv.height = 8;
+					var cx = cv.getContext("2d");
+					cx.drawImage(img, 0, 0, 8, 8);
+					var d = cx.getImageData(0, 0, 8, 2).data;
+					var r = 0, g = 0, b = 0, n = 0;
+					for (var i = 0; i < d.length; i += 4) {
+						if (d[i + 3] < 128) continue;
+						r += d[i]; g += d[i + 1]; b += d[i + 2]; n++;
+					}
+					if (n)
+						state.skyCache[url] = [r / n / 255, g / n / 255, b / n / 255];
+				}
+				catch (e) {}
+			};
+			img.src = url;
+		}
+		catch (e) {}
+		return FALLBACK_SKY;
 	}
 
 	function toWorld(mapX, mapY, mapZ) {
@@ -225,8 +269,10 @@
 		state.groundTex.needsUpdate = true;
 
 		var bg = parseBg(lMap && lMap.bgcolor);
-		state.renderer.setClearColor(new THREE.Color(bg[0], bg[1], bg[2]), 1);
-		state.scene.fog.color.setRGB(bg[0], bg[1], bg[2]);
+		if (state.skirt)
+			state.skirt.material.color.setRGB(bg[0], bg[1], bg[2]).convertSRGBToLinear();
+		var sky = sampleSky(state, opts.bgUrl);
+		state.renderer.setClearColor(srgbToLinear(new THREE.Color(sky[0], sky[1], sky[2])), 1);
 
 		var frame = cameraFrame(fCamera);
 		var cam = state.camera;

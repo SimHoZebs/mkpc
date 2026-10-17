@@ -152,8 +152,10 @@
 		geo.translate(W / 2, 0, H / 2);
 		var tex = new THREE.CanvasTexture(mapCanvas);
 		tex.encoding = THREE.sRGBEncoding;
+		// Stock samples texels unfiltered; match it exactly (no mipmaps).
 		tex.magFilter = THREE.NearestFilter;
-		tex.minFilter = THREE.NearestMipmapLinearFilter;
+		tex.minFilter = THREE.NearestFilter;
+		tex.generateMipmaps = false;
 		var mat = new THREE.MeshBasicMaterial({ map: tex });
 		state.ground = new THREE.Mesh(geo, mat);
 		state.groundTex = tex;
@@ -162,19 +164,18 @@
 		state.scene.add(state.ground);
 	}
 
-	function toWorld(mapX, mapY, mapZ, mirror, mapW) {
-		var x = mirror ? (mapW - mapX) : mapX;
-		return new THREE.Vector3(x * FIT.KX, (mapZ || 0) / WORLD_SCALE, mapY / WORLD_SCALE);
+	function toWorld(mapX, mapY, mapZ) {
+		return new THREE.Vector3(mapX * FIT.KX, (mapZ || 0) / WORLD_SCALE, mapY / WORLD_SCALE);
 	}
 
 	// Project a map-space point (pixels; mapZ = height above ground in
 	// pixels) to canvas backing-store pixels using the current chase camera.
-	// opts: {mirror, mapW} must match the ground view. Returns null when
-	// behind the camera. dist is in world units.
-	function project(state, mapX, mapY, mapZ, opts) {
+	// Always unmirrored: mirror mode flips the whole view in screen space
+	// (canvas CSS + negated sprite offsets, like stock), so this stays put.
+	// Returns null when behind the camera. dist is in world units.
+	function project(state, mapX, mapY, mapZ) {
 		if (!state || !state.camera) return null;
-		opts = opts || {};
-		var v = toWorld(mapX, mapY, mapZ, opts.mirror, opts.mapW || state.mapW);
+		var v = toWorld(mapX, mapY, mapZ);
 		var dist = state.camera.position.distanceTo(v);
 		v.project(state.camera);
 		if (v.z > 1 || v.z < -1) return null;
@@ -186,16 +187,13 @@
 		};
 	}
 
-	function cameraFrame(fCamera, mirror, mapW) {
-		var mx = mirror ? (mapW - fCamera.x) : fCamera.x;
+	function cameraFrame(fCamera) {
 		var fwd = forwardOf(fCamera.rotation || 0);
-		if (mirror)
-			fwd.x = -fwd.x;
 		// Map-space forward -> world direction (non-uniform scale), normalized.
 		var dx = fwd.x * FIT.KX, dz = fwd.y / WORLD_SCALE;
 		var len = Math.sqrt(dx * dx + dz * dz) || 1;
 		var dirX = dx / len, dirZ = dz / len;
-		var px = mx * FIT.KX, py = fCamera.y / WORLD_SCALE;
+		var px = fCamera.x * FIT.KX, py = fCamera.y / WORLD_SCALE;
 		var cosT = Math.cos(FIT.PITCH), sinT = Math.sin(FIT.PITCH);
 		return {
 			pos: {
@@ -220,7 +218,7 @@
 		var bg = parseBg(lMap && lMap.bgcolor);
 		state.renderer.setClearColor(new THREE.Color(bg[0], bg[1], bg[2]), 1);
 
-		var frame = cameraFrame(fCamera, opts.mirror, state.mapW);
+		var frame = cameraFrame(fCamera);
 		var cam = state.camera;
 		cam.position.set(frame.pos.x, frame.pos.y, frame.pos.z);
 		cam.lookAt(

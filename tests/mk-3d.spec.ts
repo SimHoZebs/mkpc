@@ -73,3 +73,51 @@ test('3D ground renderer engages and draws without errors', async ({ page }) => 
 
   await page.screenshot({ path: 'test-results/mk-3d-race.png' });
 });
+
+test('3D renderer mirrors the whole view in mirror mode', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+
+  await page.goto('/mariokart.php?engine=3d');
+  await waitForEvent(page, 'screen', { name: 'main' });
+
+  await page.evaluate(() => (window as any).mkDev.startRace({ character: 'mario', players: 2, mirror: true }));
+  await waitForEvent(page, 'raceStart', { race: 1 });
+  await page.waitForTimeout(8000);
+
+  expect(errors).toEqual([]);
+  expect(await page.evaluate(() => (window as any).mkDevEval('bSelectedMirror'))).toBe(true);
+  // The 3D camera itself is identical mirrored or not; mirroring is purely
+  // screen-space (regression: the camera position used to be mirrored,
+  // which showed a different part of the track).
+  const cams = await page.evaluate(() => (window as any).mkDevEval(`(function() {
+    var c = oScreens[0].threeInfo.camera;
+    return [c.position.x, c.position.z];
+  })()`));
+  const expectCam = await page.evaluate(() => (window as any).mkDevEval(`(function() {
+    var k = aKarts[0], r = k.rotation * Math.PI / 180;
+    var fx = Math.sin(r) * MK3D.FIT.KX, fz = Math.cos(r) / MK3D.WORLD_SCALE;
+    var len = Math.sqrt(fx*fx + fz*fz);
+    return [k.x * MK3D.FIT.KX - fx / len * MK3D.FIT.C,
+            k.y / MK3D.WORLD_SCALE - fz / len * MK3D.FIT.C];
+  })()`));
+  expect(Math.abs(cams[0] - expectCam[0])).toBeLessThan(0.01);
+  expect(Math.abs(cams[1] - expectCam[1])).toBeLessThan(0.01);
+
+  // Sprites flip around the container center, like stock.
+  const align = await page.evaluate(() =>
+    (window as any).mkDevEval(`(function() {
+      var k = aKarts[0];
+      var p = MK3D.project(oScreens[0].threeInfo, k.x, k.y, k.z);
+      var el = k.sprite[0].div;
+      var s = iScreenScale, W = iWidth*s, H = iHeight*s;
+      var ex = W - (p.x*(W+s)/W - s/2), ey = p.y*(H+s)/H + s;
+      var r = el.getBoundingClientRect();
+      var c = el.parentNode.getBoundingClientRect();
+      return { dx: (r.left - c.left + r.width/2) - ex,
+               dy: (r.top - c.top + r.height) - (ey + r.height/2) };
+    })()`)
+  );
+  expect(Math.abs(align.dx)).toBeLessThan(8);
+  expect(Math.abs(align.dy)).toBeLessThan(10);
+});

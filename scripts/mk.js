@@ -477,8 +477,15 @@ function previewScreenScale(aScreenScale, nScreenScale) {
 				oScr.aScreenScale = aScreenScale;
 			oScr.style.width = (iWidth*nScreenScale)+"px";
 			oScr.style.height = (iHeight*nScreenScale)+"px";
-			oScr.style.transformOrigin = oScr.style.WebkitTransformOrigin = oScr.style.MozTransformOrigin = "top left";
-			oScr.style.transform = oScr.style.WebkitTransform = oScr.style.MozTransform = "scale("+ (nScreenScale/oScr.aScreenScale) +")";
+			if (oScreens[i] && oScreens[i].threeInfo) {
+				oScr.style.transformOrigin = oScr.style.WebkitTransformOrigin = oScr.style.MozTransformOrigin = "center";
+				oScr.style.transform = oScr.style.WebkitTransform = oScr.style.MozTransform =
+					"scale("+ (nScreenScale/oScr.aScreenScale) +")" + ((bThreeEngine && bSelectedMirror) ? " scaleX(-1)" : "");
+			}
+			else {
+				oScr.style.transformOrigin = oScr.style.WebkitTransformOrigin = oScr.style.MozTransformOrigin = "top left";
+				oScr.style.transform = oScr.style.WebkitTransform = oScr.style.MozTransform = "scale("+ (nScreenScale/oScr.aScreenScale) +")";
+			}
 		}
 	}
 }
@@ -6193,7 +6200,15 @@ function resetScreen() {
 
 		if (bThreeEngine && window.MK3D) {
 			var threeInfo = window.MK3D.init(canvas);
-			if (threeInfo && threeInfo.renderer) oScreens[i].threeInfo = threeInfo;
+			if (threeInfo && threeInfo.renderer) {
+				oScreens[i].threeInfo = threeInfo;
+				// Mirror mode flips the whole 3D view in screen space, like
+				// stock (which negates lateral offsets). Flipping the canvas
+				// (rather than the camera) keeps the viewpoint identical.
+				canvas.style.transformOrigin = canvas.style.WebkitTransformOrigin = canvas.style.MozTransformOrigin = "center";
+				if (bSelectedMirror)
+					canvas.style.transform = canvas.style.WebkitTransform = canvas.style.MozTransform = "scaleX(-1)";
+			}
 			else {
 				console.error("Failed to initialize 3D engine, falling back to WebGL engine");
 				bThreeEngine = false;
@@ -7136,16 +7151,19 @@ function Sprite(strSprite) {
 
 		this[i].renderThree = function(screenIdx, fSprite) {
 			var i = this.i;
-			var p = window.MK3D.project(oScreens[screenIdx].threeInfo, fSprite.x, fSprite.y, fSprite.z, { mirror: bSelectedMirror });
+			var p = window.MK3D.project(oScreens[screenIdx].threeInfo, fSprite.x, fSprite.y, fSprite.z);
 			if (!p) {
 				oCtSprites[i][0].style.display = "none";
 				return;
 			}
 			// Canvas backing store is iWidth*iScreenScale px wide but styled
 			// iScreenScale wider and offset: map backing px to container px.
+			// Mirror flips around the container center, like stock.
 			var s = iScreenScale, W = iWidth * s, H = iHeight * s;
 			var iX = p.x * (W + s) / W - s / 2,
 				iY = p.y * (H + s) / H + s;
+			if (bSelectedMirror)
+				iX = W - iX;
 			var fScale = (window.MK3D.FIT.C / Math.max(0.5, p.dist)) * (fSprite.size || 1);
 			oCtSprites[i][0].style.zIndex = Math.round(10000 - p.dist * window.MK3D.WORLD_SCALE);
 			this.draw(iX, iY, fScale, 0);
@@ -7778,7 +7796,7 @@ function createMarker(oKart) {
 	};
 	res.render = function(i, fCamera, fSprite) {
 		if (bThreeEngine && window.MK3D && oScreens[i] && oScreens[i].threeInfo) {
-			var p = window.MK3D.project(oScreens[i].threeInfo, fSprite.x, fSprite.y, fSprite.z, { mirror: bSelectedMirror });
+			var p = window.MK3D.project(oScreens[i].threeInfo, fSprite.x, fSprite.y, fSprite.z);
 			if (!p) {
 				this.div[i].style.display = "none";
 				return;
@@ -7787,6 +7805,8 @@ function createMarker(oKart) {
 			var iX = p.x * (W + s) / W - s / 2,
 				iY = p.y * (H + s) / H + s,
 				fScale = (window.MK3D.FIT.C / Math.max(0.5, p.dist)) * (fSprite.size || 1);
+			if (bSelectedMirror)
+				iX = W - iX;
 			this.div[i].style.zIndex = Math.round(10000 - p.dist * window.MK3D.WORLD_SCALE);
 			this.draw(i, iX, iY, fScale, 0);
 			return;

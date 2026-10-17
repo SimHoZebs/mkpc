@@ -153,6 +153,7 @@ var bMusic = !!optionOf("music");
 var iSfx = !!optionOf("sfx");
 var iFps = +localStorage.getItem("nbFrames") || 2;
 var bLegacyEngine;
+var bThreeEngine;
 var vSfx = 1, vMusic = 1;
 {
 	var vSettings = localStorage.getItem("settings.vol");
@@ -1703,6 +1704,7 @@ function loadMap() {
 	ctrlSettings = localStorage.getItem("settings.ctrl");
 	ctrlSettings = ctrlSettings ? JSON.parse(ctrlSettings) : {};
 	bLegacyEngine = localStorage.getItem("settings.engine") === "canvas";
+	bThreeEngine = localStorage.getItem("settings.engine") === "3d";
 	if (isMobile()) {
 		if (ctrlSettings.autoacc === undefined)
 			ctrlSettings.autoacc = 1;
@@ -6171,7 +6173,23 @@ function resetScreen() {
 		oScreens.push(canvas);
 		oContainers[i].appendChild(canvas);
 
-		if (!bLegacyEngine) {
+		if (bThreeEngine && window.MK3D) {
+			var threeInfo = window.MK3D.init(canvas, { camHeight: iCamHeight, camDist: iCamDist });
+			if (threeInfo && threeInfo.renderer) oScreens[i].threeInfo = threeInfo;
+			else {
+				console.error("Failed to initialize 3D engine, falling back to WebGL engine");
+				bThreeEngine = false;
+				var glInfo = initWebGL(canvas);
+				if (glInfo && glInfo.gl) oScreens[i].glInfo = glInfo;
+				else {
+					console.error("Failed to initialize WebGL, falling back to legacy engine");
+					bLegacyEngine = true;
+					fLineScale = 1/iScreenScale;
+					aStrips = [];
+				}
+			}
+		}
+		else if (!bLegacyEngine) {
 			var glInfo = initWebGL(canvas);
 			if (glInfo && glInfo.gl) oScreens[i].glInfo = glInfo;
 			else {
@@ -7857,6 +7875,11 @@ function redrawCanvas(i, fCamera, lMap) {
 
 	const posX = fCamera.x;
 	const posY = fCamera.y;
+
+	if (bThreeEngine && oScreens[i].threeInfo && window.MK3D) {
+		window.MK3D.render(oScreens[i].threeInfo, fCamera, lMap, mapCanvas, { mirror: bSelectedMirror });
+		return;
+	}
 
 	const glInfo = oScreens[i].glInfo;
 	glInfo.gl.viewport(0, 0, glInfo.canvas.width, glInfo.canvas.height);
@@ -33019,7 +33042,8 @@ function editCommands(options) {
 		$controlSelect.style.marginLeft = "8px";
 		var engineOptions = [
 			["webgl", "WebGL"],
-			["canvas", "Canvas"]
+			["canvas", "Canvas"],
+			["3d", "3D (experimental)"]
 		];
 		for (var i=0;i<engineOptions.length;i++) {
 			var $controlOption = document.createElement("option");
@@ -33027,10 +33051,13 @@ function editCommands(options) {
 			$controlOption.innerHTML = engineOptions[i][1];
 			$controlSelect.appendChild($controlOption);
 		}
-		$controlSelect.value = (localStorage.getItem("settings.engine") === "canvas") ? "canvas" : "webgl";
+		$controlSelect.value = (function() {
+			var engine = localStorage.getItem("settings.engine");
+			return (engine === "canvas" || engine === "3d") ? engine : "webgl";
+		})();
 		$controlSelect.onchange = function() {
-			if (this.value === "canvas")
-				localStorage.setItem("settings.engine", "canvas");
+			if (this.value === "canvas" || this.value === "3d")
+				localStorage.setItem("settings.engine", this.value);
 			else
 				localStorage.removeItem("settings.engine");
 		};

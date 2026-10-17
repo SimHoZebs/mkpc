@@ -1,0 +1,150 @@
+/*
+ * MKPC 3D renderer (experimental) — scripts/mk-3d.js
+ *
+ * Third render mode next to the built-in WebGL (Mode7 shader) and legacy
+ * Canvas engines. It reuses the exact same per-frame inputs:
+ *   - fCamera {x, y, rotation} in map pixels, same as redrawCanvas()
+ *   - mapCanvas, the 2D-composited ground (track + assets + sea), as texture
+ * Physics, netcode and DOM sprites are untouched: this file only draws the
+ * ground in true 3D perspective. Karts/items become meshes in a later step.
+ *
+ * Loaded as a classic script (global MK3D), needs scripts/three.min.js first.
+ */
+(function() {
+	"use strict";
+
+	// 1 world unit = WORLD_SCALE map pixels. A 512px track becomes 64 units.
+	var WORLD_SCALE = 8;
+
+	function parseBg(bgcolor) {
+		if (Array.isArray(bgcolor) && bgcolor.length >= 3)
+			return [bgcolor[0] / 255, bgcolor[1] / 255, bgcolor[2] / 255];
+		if (typeof bgcolor === "string") {
+			var parts = bgcolor.split(",");
+			if (parts.length >= 3)
+				return [+parts[0] / 255, +parts[1] / 255, +parts[2] / 255];
+		}
+		return [0, 0, 0];
+	}
+
+	// Forward vector in map space for a kart rotation (degrees), matching the
+	// projection used by the built-in engines (see redrawCanvas/initWebGL).
+	function forwardOf(rotationDeg) {
+		var rad = rotationDeg * Math.PI / 180;
+		return { x: -Math.sin(rad), y: -Math.cos(rad) };
+	}
+
+	function init(canvas, opts) {
+		opts = opts || {};
+		if (typeof THREE === "undefined") {
+			console.error("[mk-3d] THREE global missing, cannot init 3D renderer");
+			return null;
+		}
+		try {
+			var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false, preserveDrawingBuffer: true });
+		}
+		catch (e) {
+			console.error("[mk-3d] WebGL renderer creation failed", e);
+			return null;
+		}
+		renderer.outputEncoding = THREE.sRGBEncoding;
+		renderer.setSize(canvas.width, canvas.height, false);
+		renderer.setPixelRatio(1);
+
+		var scene = new THREE.Scene();
+		var camera = new THREE.PerspectiveCamera(70, canvas.width / Math.max(1, canvas.height), 0.1, 2000);
+
+		var hemi = new THREE.HemisphereLight(0xffffff, 0x334433, 0.9);
+		scene.add(hemi);
+		var dir = new THREE.DirectionalLight(0xffffff, 0.6);
+		dir.position.set(30, 60, 20);
+		scene.add(dir);
+
+		var state = {
+			renderer: renderer,
+			scene: scene,
+			camera: camera,
+			ground: null,
+			groundTex: null,
+			mapW: 0,
+			mapH: 0,
+			camHeight: (opts.camHeight || 24) / WORLD_SCALE,
+			camDist: (opts.camDist || 32) / WORLD_SCALE,
+			lookAhead: (opts.lookAhead || 26) / WORLD_SCALE
+		};
+		return state;
+	}
+
+	function ensureGround(state, mapCanvas) {
+		var w = mapCanvas.width, h = mapCanvas.height;
+		if (state.ground && state.mapW === w && state.mapH === h)
+			return;
+		if (state.ground) {
+			state.scene.remove(state.ground);
+			state.ground.geometry.dispose();
+			if (state.groundTex) state.groundTex.dispose();
+			state.ground = null;
+		}
+		var W = w / WORLD_SCALE, H = h / WORLD_SCALE;
+		var geo = new THREE.PlaneGeometry(W, H);
+		// Lie flat: plane +Y (texture top, v=1) -> world -Z, then shift so
+		// map pixel (x,y) lands on world (x/S, 0, y/S).
+		geo.rotateX(-Math.PI / 2);
+		geo.translate(W / 2, 0, H / 2);
+		var tex = new THREE.CanvasTexture(mapCanvas);
+		tex.encoding = THREE.sRGBEncoding;
+		tex.magFilter = THREE.NearestFilter;
+		tex.minFilter = THREE.NearestMipmapLinearFilter;
+		var mat = new THREE.MeshBasicMaterial({ map: tex });
+		state.ground = new THREE.Mesh(geo, mat);
+		state.groundTex = tex;
+		state.mapW = w;
+		state.mapH = h;
+		state.scene.add(state.ground);
+	}
+
+	function render(state, fCamera, lMap, mapCanvas, opts) {
+		opts = opts || {};
+		if (!state || !mapCanvas || !mapCanvas.width) return;
+		ensureGround(state, mapCanvas);
+		state.groundTex.needsUpdate = true;
+
+		var bg = parseBg(lMap && lMap.bgcolor);
+		state.renderer.setClearColor(new THREE.Color(bg[0], bg[1], bg[2]), 1);
+
+		var px = fCamera.x / WORLD_SCALE, py = fCamera.y / WORLD_SCALE;
+		var fwd = forwardOf(fCamera.rotation || 0);
+		if (opts.mirror) {
+			px = state.mapW / WORLD_SCALE - px;
+			fwd.x = -fwd.x;
+		}
+
+		var cam = state.camera;
+		cam.position.set(
+			px - fwd.x * state.camDist,
+			state.camHeight,
+			py - fwd.y * state.camDist
+		);
+		cam.lookAt(
+			px + fwd.x * state.lookAhead,
+			0,
+			py + fwd.y * state.lookAhead
+		);
+
+		var canvas = state.renderer.domElement;
+		if (canvas.width && canvas.height) {
+			var w = canvas.width, h = canvas.height;
+			if (cam.aspect !== w / h) {
+				cam.aspect = w / h;
+				cam.updateProjectionMatrix();
+			}
+		}
+		state.renderer.render(state.scene, cam);
+	}
+
+	window.MK3D = {
+		WORLD_SCALE: WORLD_SCALE,
+		init: init,
+		render: render
+	};
+})();

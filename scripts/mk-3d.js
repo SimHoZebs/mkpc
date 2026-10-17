@@ -51,6 +51,27 @@
 		renderer.setSize(canvas.width, canvas.height, false);
 		renderer.setPixelRatio(1);
 
+		try {
+			console.log("[mk-3d] 3D renderer active (" + canvas.width + "x" + canvas.height + ")");
+			if (canvas.parentNode && !canvas.parentNode.querySelector(".mk3d-badge")) {
+				var badge = document.createElement("div");
+				badge.className = "mk3d-badge";
+				badge.textContent = "3D";
+				badge.style.position = "absolute";
+				badge.style.right = "4px";
+				badge.style.top = "4px";
+				badge.style.zIndex = 9999;
+				badge.style.background = "rgba(0,128,0,0.8)";
+				badge.style.color = "#fff";
+				badge.style.font = "bold 12px sans-serif";
+				badge.style.padding = "2px 6px";
+				badge.style.borderRadius = "4px";
+				badge.style.pointerEvents = "none";
+				canvas.parentNode.appendChild(badge);
+			}
+		}
+		catch (e) {}
+
 		var scene = new THREE.Scene();
 		var camera = new THREE.PerspectiveCamera(70, canvas.width / Math.max(1, canvas.height), 0.1, 2000);
 

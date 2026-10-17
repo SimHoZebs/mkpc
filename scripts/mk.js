@@ -1705,6 +1705,11 @@ function loadMap() {
 	ctrlSettings = ctrlSettings ? JSON.parse(ctrlSettings) : {};
 	bLegacyEngine = localStorage.getItem("settings.engine") === "canvas";
 	bThreeEngine = localStorage.getItem("settings.engine") === "3d";
+	try {
+		if (window.location && window.location.search && window.location.search.indexOf("engine=3d") !== -1)
+			bThreeEngine = true;
+	}
+	catch (e) {}
 	if (isMobile()) {
 		if (ctrlSettings.autoacc === undefined)
 			ctrlSettings.autoacc = 1;
@@ -6143,6 +6148,19 @@ function initWebGL(canvas) {
 
 function resetScreen() {
 	fSpriteScale = iScreenScale / 4;
+
+	// Re-read engine choice every (re)start so the dropdown applies to the
+	// next race without a page reload. URL ?engine=3d always forces 3D mode.
+	bThreeEngine = localStorage.getItem("settings.engine") === "3d";
+	try {
+		if (window.location && window.location.search && window.location.search.indexOf("engine=3d") !== -1)
+			bThreeEngine = true;
+	}
+	catch (e) {}
+	if (!bThreeEngine)
+		bLegacyEngine = localStorage.getItem("settings.engine") === "canvas";
+	else
+		bLegacyEngine = false;
 
 	if (bLegacyEngine) {
 		fLineScale = 1/iScreenScale;

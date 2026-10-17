@@ -7103,6 +7103,11 @@ function Sprite(strSprite) {
 		}
 
 		this[i].render = function(fCamera, fSprite) {
+			var screenIdx = this.i;
+			if (bThreeEngine && window.MK3D && oScreens[screenIdx] && oScreens[screenIdx].threeInfo) {
+				this.renderThree(screenIdx, fSprite);
+				return;
+			}
 			var fSize = (fSprite.size || 1);
 
 			var fCamX = (fSprite.x - fCamera.x)*getMirrorFactor();
@@ -7128,6 +7133,23 @@ function Sprite(strSprite) {
 				fScale = fFocal / (fFocal + fTransY) * fSize;
 			this.draw(iX,iY, fScale, iZ);
 		}
+
+		this[i].renderThree = function(screenIdx, fSprite) {
+			var i = this.i;
+			var p = window.MK3D.project(oScreens[screenIdx].threeInfo, fSprite.x, fSprite.y, fSprite.z);
+			if (!p) {
+				oCtSprites[i][0].style.display = "none";
+				return;
+			}
+			// Canvas backing store is iWidth*iScreenScale px wide but styled
+			// iScreenScale wider and offset: map backing px to container px.
+			var s = iScreenScale, W = iWidth * s, H = iHeight * s;
+			var iX = p.x * (W + s) / W - s / 2,
+				iY = p.y * (H + s) / H + s;
+			var fScale = (iCamDist / Math.max(0.5, p.dist * window.MK3D.WORLD_SCALE)) * (fSprite.size || 1);
+			oCtSprites[i][0].style.zIndex = Math.round(10000 - p.dist * window.MK3D.WORLD_SCALE);
+			this.draw(iX, iY, fScale, 0);
+		};
 
 		this[i].setState = function(iState) {
 			oCtSprites[this.i][2] = iState;
@@ -7755,6 +7777,20 @@ function createMarker(oKart) {
 		oDiv.style.top = Math.round(iY - fSpriteSize/2)+"px";
 	};
 	res.render = function(i, fCamera, fSprite) {
+		if (bThreeEngine && window.MK3D && oScreens[i] && oScreens[i].threeInfo) {
+			var p = window.MK3D.project(oScreens[i].threeInfo, fSprite.x, fSprite.y, fSprite.z);
+			if (!p) {
+				this.div[i].style.display = "none";
+				return;
+			}
+			var s = iScreenScale, W = iWidth * s, H = iHeight * s;
+			var iX = p.x * (W + s) / W - s / 2,
+				iY = p.y * (H + s) / H + s,
+				fScale = (iCamDist / Math.max(0.5, p.dist * window.MK3D.WORLD_SCALE)) * (fSprite.size || 1);
+			this.div[i].style.zIndex = Math.round(10000 - p.dist * window.MK3D.WORLD_SCALE);
+			this.draw(i, iX, iY, fScale, 0);
+			return;
+		}
 		var fSize = (fSprite.size || 1);
 
 		var fCamX = (fSprite.x - fCamera.x)*getMirrorFactor();

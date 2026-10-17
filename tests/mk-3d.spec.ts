@@ -53,5 +53,23 @@ test('3D ground renderer engages and draws without errors', async ({ page }) => 
   expect(Math.hypot(facing.dx, facing.dz)).toBeGreaterThan(5);
   expect(facing.dx * facing.cx + facing.dz * facing.cz).toBeGreaterThan(0);
 
+  // Sprite divs must sit where the 3D camera projects them (regression:
+  // entities used the Mode7 screen positions over the 3D ground).
+  const align = await page.evaluate(() =>
+    (window as any).mkDevEval(`(function() {
+      var k = aKarts[0];
+      var p = MK3D.project(oScreens[0].threeInfo, k.x, k.y, k.z);
+      var el = k.sprite[0].div;
+      var s = iScreenScale, W = iWidth*s, H = iHeight*s;
+      var ex = p.x*(W+s)/W - s/2, ey = p.y*(H+s)/H + s;
+      var r = el.getBoundingClientRect();
+      var c = el.parentNode.getBoundingClientRect();
+      return { dx: (r.left - c.left + r.width/2) - ex,
+               dy: (r.top - c.top + r.height) - (ey + r.height/2) };
+    })()`)
+  );
+  expect(Math.abs(align.dx)).toBeLessThan(8);
+  expect(Math.abs(align.dy)).toBeLessThan(10);
+
   await page.screenshot({ path: 'test-results/mk-3d-race.png' });
 });

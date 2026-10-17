@@ -134,8 +134,24 @@
 		state.scene.add(state.ground);
 	}
 
-	function render(state, fCamera, lMap, mapCanvas, opts) {
-		opts = opts || {};
+	// Project a map-space point (pixels; mapZ = height above ground in
+	// pixels) to canvas backing-store pixels using the current chase camera.
+	// Returns null when behind the camera. dist is in world units.
+	function project(state, mapX, mapY, mapZ) {
+		if (!state || !state.camera) return null;
+		var v = new THREE.Vector3(mapX / WORLD_SCALE, (mapZ || 0) / WORLD_SCALE, mapY / WORLD_SCALE);
+		var dist = state.camera.position.distanceTo(v);
+		v.project(state.camera);
+		if (v.z > 1 || v.z < -1) return null;
+		var cv = state.renderer.domElement;
+		return {
+			x: (v.x * 0.5 + 0.5) * cv.width,
+			y: (-v.y * 0.5 + 0.5) * cv.height,
+			dist: dist
+		};
+	}
+
+	function render(state, fCamera, lMap, mapCanvas, opts) {		opts = opts || {};
 		if (!state || !mapCanvas || !mapCanvas.width) return;
 		ensureGround(state, mapCanvas);
 		state.groundTex.needsUpdate = true;
@@ -176,6 +192,7 @@
 	window.MK3D = {
 		WORLD_SCALE: WORLD_SCALE,
 		init: init,
+		project: project,
 		render: render
 	};
 })();

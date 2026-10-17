@@ -35,5 +35,23 @@ test('3D ground renderer engages and draws without errors', async ({ page }) => 
   expect(await page.evaluate(() => (window as any).mkDevEval('bThreeEngine'))).toBe(true);
   expect(await page.evaluate(() => (window as any).mkDevEval('oScreens.map(function(s) { return !!s.threeInfo; })'))).toEqual([true]);
   await expect(page.locator('.mk3d-badge')).toBeVisible();
+
+  // Chase camera must face the direction of travel (regression: a
+  // sign-flipped forward vector once pointed it backward, which made
+  // driving look reversed and karts appear detached from the road).
+  const p0 = await page.evaluate(() => (window as any).mkDevEval('({x: aKarts[0].x, y: aKarts[0].y})'));
+  await page.keyboard.down('ArrowUp');
+  await page.waitForTimeout(3000);
+  await page.keyboard.up('ArrowUp');
+  const facing = await page.evaluate((p0: { x: number; y: number }) =>
+    (window as any).mkDevEval(
+      '(function(p0) { var k = aKarts[0];' +
+      ' var d = oScreens[0].threeInfo.camera.getWorldDirection(new THREE.Vector3());' +
+      ' return { dx: (k.x - p0.x) / 8, dz: (k.y - p0.y) / 8, cx: d.x, cz: d.z }; })(' +
+      JSON.stringify(p0) + ')'
+  ), p0);
+  expect(Math.hypot(facing.dx, facing.dz)).toBeGreaterThan(5);
+  expect(facing.dx * facing.cx + facing.dz * facing.cz).toBeGreaterThan(0);
+
   await page.screenshot({ path: 'test-results/mk-3d-race.png' });
 });

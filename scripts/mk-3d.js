@@ -27,11 +27,14 @@
 		return [0, 0, 0];
 	}
 
-	// Forward vector in map space for a kart rotation (degrees), matching the
-	// projection used by the built-in engines (see redrawCanvas/initWebGL).
+	// Forward vector in map space for a kart rotation (degrees).
+	// Grounded empirically: holding accelerate at rotation 180 drives the
+	// kart toward -y, so forward(180) = (0,-1), i.e. (sin, cos), NOT
+	// (-sin, -cos). (An earlier sign-flipped version pointed the chase
+	// camera backward, which made driving look reversed.)
 	function forwardOf(rotationDeg) {
 		var rad = rotationDeg * Math.PI / 180;
-		return { x: -Math.sin(rad), y: -Math.cos(rad) };
+		return { x: Math.sin(rad), y: Math.cos(rad) };
 	}
 
 	function init(canvas, opts) {

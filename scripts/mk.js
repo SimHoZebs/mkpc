@@ -7156,6 +7156,21 @@ function Sprite(strSprite) {
 				oCtSprites[i][0].style.display = "none";
 				return;
 			}
+			var occHide = this._occHide;
+			if (window.MK3D.occlusionClearance) {
+				var occClear = window.MK3D.occlusionClearance(oScreens[screenIdx].threeInfo, fSprite.x, fSprite.y, fSprite.z);
+				if (occClear < 0) occHide = true;
+				else if (occClear > 0.25) occHide = false;
+			}
+			else if (window.MK3D.isOccluded && window.MK3D.isOccluded(oScreens[screenIdx].threeInfo, fSprite.x, fSprite.y, fSprite.z))
+				occHide = true;
+			else
+				occHide = false;
+			this._occHide = occHide;
+			if (occHide) {
+				oCtSprites[i][0].style.display = "none";
+				return;
+			}
 			// Canvas backing store is iWidth*iScreenScale px wide but styled
 			// iScreenScale wider and offset: map backing px to container px.
 			// Mirror flips around the container center, like stock.
@@ -12862,6 +12877,16 @@ function render() {
 				for (var j=0;j<frameStateDecor[type].length;j++) {
 					fSprite = frameStateDecor[type][j];
 					if (fSprite.ref[2][0].unshown) continue;
+					if (bThreeEngine && window.MK3D && window.MK3D.syncDecor && oScreens[i].threeInfo) {
+						var oDecorBehavior = (typeof decorBehaviors !== "undefined") ? decorBehaviors[type] : null;
+						var decorWPx = (oDecorBehavior && oDecorBehavior.hitbox) || DEFAULT_DECOR_HITBOX;
+						var decorHPx = (oDecorBehavior && oDecorBehavior.hitboxH) || DEFAULT_DECOR_HITBOX_H;
+						try {
+							if (window.MK3D.syncDecor(oScreens[i].threeInfo, type, j, fSprite.x, fSprite.y, fSprite.z, decorWPx, decorHPx))
+								continue;
+						}
+						catch (e) {}
+					}
 					fSprite.ref[2][i].render(fCamera, {
 						x: fSprite.x,
 						y: fSprite.y,

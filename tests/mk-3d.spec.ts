@@ -99,6 +99,58 @@ test('3D ground renderer engages and draws without errors', async ({ page }) => 
   })()`));
   expect(ring).toEqual([true, true]);
 
+  // Walls: collision rects/polys are extruded to flat-shaded meshes.
+  // Present exactly when the map defines collision shapes.
+  const walls = await page.evaluate(() => (window as any).mkDevEval(`(function() {
+    var c = getCurrentLMap(getCurrentLapId(oPlayers[0])).collision || {};
+    var total = (c.rectangle ? c.rectangle.length : 0) + (c.polygon ? c.polygon.length : 0);
+    var w = oScreens[0].threeInfo.walls;
+    return { total: total, built: w ? w.children.length : null };
+  })()`));
+  expect(walls.total).toBeGreaterThanOrEqual(0);
+  if (walls.total > 0) expect(walls.built).toBeGreaterThan(0);
+  else expect(walls.built).toBeNull();
+
+  // Obstacles: decors sync to volumetric meshes instead of DOM billboards.
+  const decor = await page.evaluate(() => (window as any).mkDevEval(`(function() {
+    var k = aKarts[0];
+    var ok = MK3D.syncDecor(oScreens[0].threeInfo, "tree", 9999, k.x, k.y, 0, 4, 4);
+    var g = oScreens[0].threeInfo.decorGroup;
+    var shown = g ? g.children.filter(function(m) { return m.visible; }).length : -1;
+    return { sync: ok, shown: shown };
+  })()`));
+  expect(decor.sync).toBe(true);
+  expect(decor.shown).toBeGreaterThan(0);
+
+  // Sprites hide behind walls: park the camera in front of a real wall
+  // and check the sight line to a point past it.
+  const occl = await page.evaluate(() => (window as any).mkDevEval(`(function() {
+    var info = oScreens[0].threeInfo;
+    if (!info.wallList || !info.wallList.length) return { skipped: true };
+    var lMap = getCurrentLMap(getCurrentLapId(oPlayers[0]));
+    var rects = (lMap.collision && lMap.collision.rectangle) || [];
+    var props = (lMap.collisionProps && lMap.collisionProps.rectangle) || {};
+    var r = null;
+    for (var k = 0; k < rects.length; k++) {
+      var p = props[k];
+      var z = (p && p.z != null) ? +p.z : 1;
+      if (z >= 1 && rects[k][2] > 0 && rects[k][3] > 0) { r = rects[k]; break; }
+    }
+    if (!r) return { skipped: true };
+    var cx = r[0] + r[2] / 2, before = r[1] - 30, after = r[1] + r[3] + 30;
+    var cam = info.camera.position, ox = cam.x, oy = cam.y, oz = cam.z;
+    cam.set(cx * MK3D.FIT.KX, 1.0, before / MK3D.WORLD_SCALE);
+    var behind = MK3D.isOccluded(info, cx, after, 0);
+    var front = MK3D.isOccluded(info, cx, before - 10, 0);
+    cam.set(ox, oy, oz);
+    return { behind: behind, front: front };
+  })()`));
+  if (walls.total > 0) expect(occl.skipped).not.toBe(true);
+  if (!occl.skipped) {
+    expect(occl.behind).toBe(true);
+    expect(occl.front).toBe(false);
+  }
+
   await page.screenshot({ path: 'test-results/mk-3d-race.png' });
 });
 
@@ -148,4 +200,45 @@ test('3D renderer mirrors the whole view in mirror mode', async ({ page }) => {
   );
   expect(Math.abs(align.dx)).toBeLessThan(8);
   expect(Math.abs(align.dy)).toBeLessThan(10);
+});
+
+test('3D boost pads and holes build from track data', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+
+  // map8 defines both boost pads and hole zones.
+  await page.goto('/mariokart.php?engine=3d');
+  await waitForEvent(page, 'screen', { name: 'main' });
+
+  await page.evaluate(() => (window as any).mkDev.startRace({ character: 'mario', players: 2, map: 8 }));
+  await waitForEvent(page, 'raceStart', { race: 1 });
+  await page.waitForTimeout(8000);
+
+  expect(errors).toEqual([]);
+
+  // Boost pads: one pulsing decal per accelerateurs zone.
+  const boosts = await page.evaluate(() => (window as any).mkDevEval(`(function() {
+    var lMap = getCurrentLMap(getCurrentLapId(oPlayers[0]));
+    var acc = lMap.accelerateurs || {rectangle: [], polygon: []};
+    var total = acc.rectangle.length + acc.polygon.length;
+    var b = oScreens[0].threeInfo.boosts;
+    return { total: total, built: b ? b.children.length : null };
+  })()`));
+  expect(boosts.total).toBeGreaterThan(0);
+  expect(boosts.built).toEqual(boosts.total);
+
+  // Holes: one darkened decal per trous zone across all groups.
+  const holes = await page.evaluate(() => (window as any).mkDevEval(`(function() {
+    var lMap = getCurrentLMap(getCurrentLapId(oPlayers[0]));
+    var total = 0, trous = lMap.trous || {};
+    for (var k in trous)
+      total += trous[k].rectangle.length + trous[k].polygon.length;
+    var h = oScreens[0].threeInfo.holes;
+    return { total: total, built: h ? h.children.length : null };
+  })()`));
+  expect(holes.total).toBeGreaterThan(0);
+  expect(holes.built).toBeGreaterThan(0);
+  expect(holes.built).toBeLessThanOrEqual(holes.total);
+
+  await page.screenshot({ path: 'test-results/mk-3d-boosts.png' });
 });
